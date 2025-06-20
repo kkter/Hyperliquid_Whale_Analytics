@@ -2,10 +2,12 @@
 ## Git
 
 ```
-git init
-git commit -m "init"
-git branch -M master
-git remote add origin git@github.com:kkter/OneData.git
+
+git add .
+
+git commit -m "get_address.py 输出存入数据库，代码改纯英文版"
+
+
 git push -u origin master
 ```
 
@@ -82,6 +84,7 @@ git push -u origin master
 数据模型建议：你可以设计一个表来存储巨鲸持仓记录。
 ```
 
+### 2025-06-20
 
 拿到地址以后，将地址存进一个数据表。
 通过 Hyperliquid 的官方 API 获取仓位的详细信息。
