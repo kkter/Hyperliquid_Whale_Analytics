@@ -1,0 +1,104 @@
+{% extends "layout.html" %}
+
+{% block title %}Profile: {{ whale.address[:10] }}...{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mb-1">Whale Profile</h2>
+    <p class="text-muted mb-4" style="word-wrap: break-word;">{{ whale.address }}</p>
+
+    <div class="card mb-4">
+        <div class="card-header">Current Positions</div>
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Position (USD)</th>
+                        <th>Unrealized PnL</th>
+                        <th>Leverage</th>
+                        <th>Entry Price</th>
+                        <th>Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pos in positions %}
+                    <tr>
+                        <td><strong>{{ pos.asset }}</strong></td>
+                        <td>${{ "{:,.2f}".format(pos.position_size_usd or 0) }}</td>
+                        <td class="{% if (pos.unrealized_pnl or 0) > 0 %}text-success{% else %}text-danger{% endif %}">
+                            ${{ "{:,.2f}".format(pos.unrealized_pnl or 0) }}
+                        </td>
+                        <td>{{ "{:,.2f}".format(pos.leverage or 0) }}x</td>
+                        <td>${{ "{:,.2f}".format(pos.entry_price or 0) }}</td>
+                        <td>{{ pos.last_updated.split('.')[0] }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">No current position details found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Historical Rank on Leaderboard</div>
+        <div class="card-body">
+            <canvas id="rankHistoryChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Fetch data from our API endpoint
+    fetch(`/api/whale_history/{{ whale.address }}`)
+        .then(response => response.json())
+        .then(data => {
+            const ctx = document.getElementById('rankHistoryChart').getContext('2d');
+            
+            const datasets = [];
+            const colors = ['#0d6efd', '#dc3545', '#198754', '#ffc107', '#0dcaf0'];
+            let colorIndex = 0;
+
+            // Create a dataset for each asset
+            for (const asset in data) {
+                datasets.push({
+                    label: `${asset} Rank`,
+                    data: data[asset].data,
+                    borderColor: colors[colorIndex % colors.length],
+                    backgroundColor: colors[colorIndex % colors.length] + '33', // semi-transparent fill
+                    tension: 0.1,
+                    fill: false
+                });
+                colorIndex++;
+            }
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    // Use the labels from the first dataset (they should be consistent)
+                    labels: data[Object.keys(data)[0]]?.labels || [],
+                    datasets: datasets
+                },
+                options: {
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Rank' },
+                            reverse: true, // Lower rank number is better
+                            beginAtZero: false
+                        },
+                        x: {
+                            title: { display: true, text: 'Date' }
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        });
+});
+</script>
+{% endblock %}

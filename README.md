@@ -1,20 +1,4 @@
 
-## Git
-
-```
-
-git add .
-
-git commit -m "get_address.py 输出存入数据库，代码改纯英文版"
-
-
-git push -u origin master
-```
-
-
-
-
----
 
 ## Update
 

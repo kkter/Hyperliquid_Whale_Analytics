@@ -137,21 +137,34 @@ def save_data_to_db(whale_data):
             conn.close()
 
 if __name__ == "__main__":
-    try:
-        # 1. Setup the database and tables
-        setup_database()
+    # Define the scraping interval in hours
+    SCRAPING_INTERVAL_HOURS = 4
+    
+    # First, ensure the database and tables are set up before starting the loop.
+    print("Performing initial database setup...")
+    setup_database()
 
-        # 2. Scrape the data from the website
-        latest_whale_data = scrape_whale_data()
+    while True:
+        try:
+            print(f"\n--- Starting new scraping cycle at {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+            
+            # 1. Scrape the data from the website
+            latest_whale_data = scrape_whale_data()
 
-        # 3. Save the scraped data to the database
-        if latest_whale_data:
-            save_data_to_db(latest_whale_data)
-            print("\n--- Scraping Summary ---")
-            for data in latest_whale_data:
-                print(f"Rank: {data['rank']}, Asset: {data['asset']}, Address: {data['address']}")
-        else:
-            print("Scraping did not yield any data.")
+            # 2. Save the scraped data to the database
+            if latest_whale_data:
+                save_data_to_db(latest_whale_data)
+                print("\n--- Scraping Summary ---")
+                for data in latest_whale_data:
+                    print(f"Rank: {data['rank']}, Asset: {data['asset']}, Address: {data['address']}")
+            else:
+                print("Scraping did not yield any data.")
 
-    except Exception as e:
-        print(f"\nAn unexpected error occurred in the main process: {e}")
+        except Exception as e:
+            print(f"\nAn unexpected error occurred in the main process: {e}")
+        
+        finally:
+            # 3. Wait for the next cycle
+            wait_seconds = SCRAPING_INTERVAL_HOURS * 3600
+            print(f"\n--- Cycle finished. Waiting for {SCRAPING_INTERVAL_HOURS} hours ({wait_seconds} seconds)... ---")
+            time.sleep(wait_seconds)
