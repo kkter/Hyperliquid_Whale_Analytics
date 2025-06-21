@@ -22,6 +22,7 @@ def get_positions(address, coin):
         if response.status_code == 200:
             data = response.json()
             
+            print(data)
 
             print("==========================")
                   

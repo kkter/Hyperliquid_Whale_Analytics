@@ -6,30 +6,24 @@
 <div class="container">
     <!-- 1. Market Overview Section -->
     <h2 class="mb-3">Market Overview</h2>
+    <div class="row mb-4" id="kpi-cards-container">
+        <!-- KPI Cards will be loaded here by JavaScript -->
+    </div>
+
     <div class="row mb-5">
-        <div class="col-md-4">
-            <div class="card text-center">
+        <div class="col-md-6">
+            <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Tracked Whales</h5>
-                    <p class="card-text fs-2 fw-bold">{{ kpi_cards.total_whales }}</p>
+                    <h5 class="card-title">Asset Distribution by Value</h5>
+                    <canvas id="assetDistributionChart"></canvas>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card text-center">
+        <div class="col-md-6">
+            <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Net Market Sentiment (USD)</h5>
-                    <p class="card-text fs-2 fw-bold {% if kpi_cards.market_sentiment > 0 %}text-success{% else %}text-danger{% endif %}">
-                        ${{ "{:,.2f}".format(kpi_cards.market_sentiment) }}
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title">Average Leverage</h5>
-                    <p class="card-text fs-2 fw-bold">{{ "{:,.2f}".format(kpi_cards.avg_leverage) }}x</p>
+                    <h5 class="card-title">Long vs. Short Sentiment</h5>
+                    <canvas id="marketSentimentChart"></canvas>
                 </div>
             </div>
         </div>
@@ -45,6 +39,7 @@
                         <th>Rank</th>
                         <th>Asset</th>
                         <th>Address</th>
+                        <th>Direction</th>
                         <th>Position (USD)</th>
                         <th>Unrealized PnL</th>
                         <th>Leverage</th>
@@ -61,8 +56,19 @@
                                 {{ pos.whale_address[:6] }}...{{ pos.whale_address[-4:] }}
                             </a>
                         </td>
-                        <td>${{ "{:,.2f}".format(pos.position_size_usd or 0) }}</td>
-                        <td class="{% if (pos.unrealized_pnl or 0) > 0 %}text-success{% else %}text-danger{% endif %}">
+                        <td>
+                            {% if pos.direction == 'Long' %}
+                                <span class="badge bg-success">Long</span>
+                            {% elif pos.direction == 'Short' %}
+                                <span class="badge bg-danger">Short</span>
+                            {% else %}
+                                <span class="badge bg-secondary">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td data-value="{{ pos.position_size_usd or 0 }}">
+                            ${{ "{:,.2f}".format((pos.position_size_usd or 0) | abs) }}
+                        </td>
+                        <td class="{% if (pos.unrealized_pnl or 0) >= 0 %}text-success{% else %}text-danger{% endif %}" data-value="{{ pos.unrealized_pnl or 0 }}">
                             ${{ "{:,.2f}".format(pos.unrealized_pnl or 0) }}
                         </td>
                         <td>{{ "{:,.2f}".format(pos.leverage or 0) }}x</td>
@@ -74,4 +80,103 @@
         </div>
     </div>
 </div>
+
+<script>
+// --- NEW: Helper function to format large numbers ---
+function formatLargeNumber(num) {
+    if (num === null || isNaN(num)) return 'N/A';
+    if (num === 0) return '0';
+
+    const sign = num < 0 ? '-' : '';
+    const absNum = Math.abs(num);
+    
+    if (absNum >= 1e9) {
+        return sign + (absNum / 1e9).toFixed(2) + 'B';
+    }
+    if (absNum >= 1e6) {
+        return sign + (absNum / 1e6).toFixed(2) + 'M';
+    }
+    if (absNum >= 1e3) {
+        return sign + (absNum / 1e3).toFixed(2) + 'K';
+    }
+    return sign + absNum.toFixed(2);
+}
+
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Fetch all overview data from our new API endpoint
+    fetch('/api/market_overview')
+        .then(response => response.json())
+        .then(data => {
+            // --- 1. Populate KPI Cards ---
+            const kpiContainer = document.getElementById('kpi-cards-container');
+            const kpis = data.kpi_cards;
+            const sentimentColor = kpis.net_sentiment > 0 ? 'text-success' : 'text-danger';
+            
+            kpiContainer.innerHTML = `
+                <div class="col-md-4">
+                    <div class="card text-center"><div class="card-body">
+                        <h5 class="card-title">Tracked Whales</h5>
+                        <p class="card-text fs-2 fw-bold">${kpis.total_whales}</p>
+                    </div></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-center"><div class="card-body">
+                        <h5 class="card-title">Net Market Sentiment (USD)</h5>
+                        <p class="card-text fs-2 fw-bold ${sentimentColor}">
+                            $${formatLargeNumber(kpis.net_sentiment)}
+                        </p>
+                    </div></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-center"><div class="card-body">
+                        <h5 class="card-title">Average Leverage</h5>
+                        <p class="card-text fs-2 fw-bold">${kpis.avg_leverage.toFixed(2)}x</p>
+                    </div></div>
+                </div>
+            `;
+
+            // --- 2. Create Asset Distribution Pie Chart ---
+            const assetCtx = document.getElementById('assetDistributionChart').getContext('2d');
+            new Chart(assetCtx, {
+                type: 'pie',
+                data: {
+                    labels: data.asset_distribution.labels,
+                    datasets: [{
+                        label: 'Total Position Value',
+                        data: data.asset_distribution.data,
+                        backgroundColor: ['#0d6efd', '#6f42c1', '#d63384', '#fd7e14', '#198754', '#ffc107', '#0dcaf0'],
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+
+            // --- 3. Create Market Sentiment Doughnut Chart ---
+            const sentimentCtx = document.getElementById('marketSentimentChart').getContext('2d');
+            new Chart(sentimentCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.market_sentiment.labels,
+                    datasets: [{
+                        label: 'Total Position Value',
+                        data: data.market_sentiment.data,
+                        backgroundColor: ['#198754', '#dc3545'], // Green for Longs, Red for Shorts
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        });
+
+    // --- NEW: Format numbers in the table after page load ---
+    document.querySelectorAll('td[data-value]').forEach(cell => {
+        const value = parseFloat(cell.getAttribute('data-value'));
+        // For position size, we show the absolute value since direction is in another column.
+        if (cell.cellIndex === 4) { // 4 is the index of "Position (USD)" column
+             cell.textContent = '$' + formatLargeNumber(Math.abs(value));
+        } else { // For PnL, we keep the sign.
+             cell.textContent = '$' + formatLargeNumber(value);
+        }
+    });
+});
+</script>
 {% endblock %}

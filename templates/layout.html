@@ -9,7 +9,17 @@
     <!-- Chart.js for charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { background-color: #f8f9fa; }
+        /* --- CSS FOR STICKY FOOTER --- */
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Make body at least the height of the viewport */
+        }
+        main.container {
+            flex-grow: 1; /* Allow main content to grow and push the footer down */
+        }
+        /* --- End of Sticky Footer CSS --- */
+
         .table-hover tbody tr:hover { background-color: #e9ecef; }
     </style>
 </head>

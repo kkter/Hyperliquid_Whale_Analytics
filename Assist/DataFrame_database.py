@@ -2,7 +2,7 @@ import sqlite3
 import pandas as pd
 
 # 连接到 .db 文件
-db_path = 'whale_tracker.db'  # 替换为你的 .db 文件路径
+db_path = './whale_tracker.db'  # 替换为你的 .db 文件路径
 conn = sqlite3.connect(db_path)
 
 # 查看所有表名

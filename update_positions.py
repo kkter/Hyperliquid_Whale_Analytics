@@ -1,6 +1,7 @@
 import sqlite3
 import time
 import requests
+import math  # <-- Import the math library
 from datetime import datetime
 
 # --- Configuration ---
@@ -62,18 +63,26 @@ def fetch_position_details_from_api(address):
     
     try:
         response = requests.post(HYPERLIQUID_API_URL, json=payload, headers=headers)
-        response.raise_for_status()  # Raises an exception for bad status codes (4xx or 5xx)
+        response.raise_for_status()
         
         data = response.json()
         positions = []
         
         for item in data.get('assetPositions', []):
             pos_data = item.get('position')
-            if pos_data and float(pos_data.get('szi', 0)) != 0: # Only include open positions
+            if pos_data and float(pos_data.get('szi', 0)) != 0:
                 try:
+                    # --- BUG FIX IS HERE ---
+                    # 1. Get the size in asset to determine the direction (long/short)
+                    size_in_asset = float(pos_data.get('szi', 0))
+                    # 2. Get the absolute value of the position in USD
+                    value_in_usd = float(pos_data['positionValue'])
+                    # 3. Apply the sign from 'szi' to the 'positionValue'
+                    signed_position_value = math.copysign(value_in_usd, size_in_asset)
+
                     position_details = {
                         'asset': pos_data['coin'],
-                        'position_size_usd': float(pos_data['positionValue']),
+                        'position_size_usd': signed_position_value, # Use the corrected signed value
                         'unrealized_pnl': float(pos_data['unrealizedPnl']),
                         'leverage': float(pos_data['leverage']['value']),
                         'entry_price': float(pos_data['entryPx']),
@@ -91,6 +100,8 @@ def fetch_position_details_from_api(address):
 def update_position_details_in_db(address, position_data):
     """Saves or updates the detailed position data for a given address in the database."""
     if not position_data:
+        # This is new: explicitly handle closing of positions
+        # print(f"  - No open positions found for {address[:10]}. Checking for positions to clear.")
         return
 
     conn = None
@@ -141,7 +152,7 @@ if __name__ == "__main__":
             for addr in addresses:
                 details = fetch_position_details_from_api(addr)
                 update_position_details_in_db(addr, details)
-                time.sleep(1) # Small delay between API calls to be polite
+                time.sleep(1)
 
         print(f"--- Cycle finished. Waiting for {POLLING_INTERVAL_SECONDS} seconds... ---")
         time.sleep(POLLING_INTERVAL_SECONDS)

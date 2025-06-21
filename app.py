@@ -16,7 +16,7 @@ def index():
     conn = get_db_connection()
     
     # --- 1. Fetch data for the main leaderboard table ---
-    # This query joins the latest leaderboard snapshot with detailed position info.
+    # This query is updated to include a 'direction' field.
     positions = conn.execute('''
         SELECT
             ls.rank,
@@ -26,36 +26,39 @@ def index():
             pd.unrealized_pnl,
             pd.leverage,
             pd.entry_price,
-            pd.last_updated
+            CASE
+                WHEN pd.position_size_usd > 0 THEN 'Long'
+                WHEN pd.position_size_usd < 0 THEN 'Short'
+                ELSE 'N/A'
+            END as direction
         FROM leaderboard_snapshots ls
         LEFT JOIN position_details pd ON ls.whale_address = pd.whale_address AND ls.asset = pd.asset
         WHERE ls.scrape_time = (SELECT MAX(scrape_time) FROM leaderboard_snapshots)
         ORDER BY ls.rank ASC
     ''').fetchall()
 
-    # --- 2. Calculate KPIs for the Market Overview section ---
-    kpi_cards = {
-        'total_whales': conn.execute('SELECT COUNT(*) FROM addresses').fetchone()[0],
-        'market_sentiment': conn.execute('SELECT SUM(position_size_usd) FROM position_details').fetchone()[0] or 0,
-        'avg_leverage': conn.execute('SELECT AVG(leverage) FROM position_details WHERE leverage > 0').fetchone()[0] or 0
-    }
-
     conn.close()
-    return render_template('index.html', positions=positions, kpi_cards=kpi_cards)
+    return render_template('index.html', positions=positions)
 
 @app.route('/whale/<address>')
 def whale_profile(address):
     """Page for a single whale's profile."""
     conn = get_db_connection()
     
-    # Fetch general info about the whale
     whale = conn.execute('SELECT * FROM addresses WHERE address = ?', (address,)).fetchone()
     
-    # Fetch all current positions for this whale
+    # --- QUERY MODIFIED HERE ---
+    # Add the CASE statement to determine position direction.
     current_positions = conn.execute('''
-        SELECT * FROM position_details 
+        SELECT *,
+            CASE
+                WHEN position_size_usd > 0 THEN 'Long'
+                WHEN position_size_usd < 0 THEN 'Short'
+                ELSE 'N/A'
+            END as direction
+        FROM position_details 
         WHERE whale_address = ? 
-        ORDER BY position_size_usd DESC
+        ORDER BY ABS(position_size_usd) DESC
     ''', (address,)).fetchall()
     
     conn.close()
@@ -83,6 +86,54 @@ def whale_history_api(address):
         datasets[asset]['data'].append(row['rank'])
         
     return jsonify(datasets)
+
+# --- NEW API ENDPOINT FOR OVERVIEW CHARTS ---
+@app.route('/api/market_overview')
+def market_overview_api():
+    """API endpoint to provide data for the overview charts and KPIs."""
+    conn = get_db_connection()
+
+    # 1. Calculate KPIs
+    kpi_cards = {
+        'total_whales': conn.execute('SELECT COUNT(*) FROM addresses').fetchone()[0],
+        'net_sentiment': conn.execute('SELECT SUM(position_size_usd) FROM position_details').fetchone()[0] or 0,
+        'avg_leverage': conn.execute('SELECT AVG(leverage) FROM position_details WHERE leverage > 0').fetchone()[0] or 0
+    }
+
+    # 2. Calculate Asset Distribution for Pie Chart
+    asset_dist_data = conn.execute('''
+        SELECT asset, SUM(ABS(position_size_usd)) as total_value
+        FROM position_details
+        GROUP BY asset
+        ORDER BY total_value DESC
+    ''').fetchall()
+    
+    asset_distribution = {
+        'labels': [row['asset'] for row in asset_dist_data],
+        'data': [row['total_value'] for row in asset_dist_data]
+    }
+
+    # 3. Calculate Long vs Short for Doughnut Chart
+    sentiment_data = conn.execute('''
+        SELECT
+            SUM(CASE WHEN position_size_usd > 0 THEN position_size_usd ELSE 0 END) as long_value,
+            SUM(CASE WHEN position_size_usd < 0 THEN ABS(position_size_usd) ELSE 0 END) as short_value
+        FROM position_details
+    ''').fetchone()
+
+    market_sentiment = {
+        'labels': ['Longs', 'Shorts'],
+        'data': [sentiment_data['long_value'] or 0, sentiment_data['short_value'] or 0]
+    }
+
+    conn.close()
+    
+    return jsonify({
+        'kpi_cards': kpi_cards,
+        'asset_distribution': asset_distribution,
+        'market_sentiment': market_sentiment
+    })
+
 
 if __name__ == '__main__':
     app.run(debug=True)
