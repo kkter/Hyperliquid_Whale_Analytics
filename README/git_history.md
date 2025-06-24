@@ -23,3 +23,9 @@ git push origin
    完成前端页面
 
    git commit -m "前、后端完成"
+
+4. 数据库中“size”全为正值，实际上空头仓位的“siz"是负值。
+   结果就是全为“Long”；
+   其他小Bug;
+
+   git commit -m "修复小Bug"

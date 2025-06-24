@@ -14,6 +14,7 @@
                 <thead>
                     <tr>
                         <th>Asset</th>
+                        <th>Direction</th>
                         <th>Position (USD)</th>
                         <th>Unrealized PnL</th>
                         <th>Leverage</th>
@@ -25,8 +26,19 @@
                     {% for pos in positions %}
                     <tr>
                         <td><strong>{{ pos.asset }}</strong></td>
-                        <td>${{ "{:,.2f}".format(pos.position_size_usd or 0) }}</td>
-                        <td class="{% if (pos.unrealized_pnl or 0) > 0 %}text-success{% else %}text-danger{% endif %}">
+                        <td>
+                            {% if pos.direction == 'Long' %}
+                                <span class="badge bg-success">Long</span>
+                            {% elif pos.direction == 'Short' %}
+                                <span class="badge bg-danger">Short</span>
+                            {% else %}
+                                <span class="badge bg-secondary">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td data-value="{{ pos.position_size_usd or 0 }}">
+                            ${{ "{:,.2f}".format((pos.position_size_usd or 0) | abs) }}
+                        </td>
+                        <td class="{% if (pos.unrealized_pnl or 0) >= 0 %}text-success{% else %}text-danger{% endif %}" data-value="{{ pos.unrealized_pnl or 0 }}">
                             ${{ "{:,.2f}".format(pos.unrealized_pnl or 0) }}
                         </td>
                         <td>{{ "{:,.2f}".format(pos.leverage or 0) }}x</td>
@@ -35,7 +47,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center">No current position details found.</td>
+                        <td colspan="7" class="text-center">No current position details found.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -52,8 +64,31 @@
 </div>
 
 <script>
+// This function should be moved to layout.html if not already there,
+// but including it here for completeness.
+function formatLargeNumber(num) {
+    if (num === null || isNaN(num)) return 'N/A';
+    if (num === 0) return '0';
+    const sign = num < 0 ? '-' : '';
+    const absNum = Math.abs(num);
+    if (absNum >= 1e9) return sign + (absNum / 1e9).toFixed(2) + 'B';
+    if (absNum >= 1e6) return sign + (absNum / 1e6).toFixed(2) + 'M';
+    if (absNum >= 1e3) return sign + (absNum / 1e3).toFixed(2) + 'K';
+    return sign + absNum.toFixed(2);
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-    // Fetch data from our API endpoint
+    // Format numbers in the table
+    document.querySelectorAll('td[data-value]').forEach(cell => {
+        const value = parseFloat(cell.getAttribute('data-value'));
+        if (cell.cellIndex === 2) { // Position (USD) column
+             cell.textContent = '$' + formatLargeNumber(Math.abs(value));
+        } else { // PnL column
+             cell.textContent = '$' + formatLargeNumber(value);
+        }
+    });
+
+    // Fetch data for the chart
     fetch(`/api/whale_history/{{ whale.address }}`)
         .then(response => response.json())
         .then(data => {
