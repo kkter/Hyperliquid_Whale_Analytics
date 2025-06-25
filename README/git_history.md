@@ -1,4 +1,6 @@
 
+- 推送到私人仓库 Onedata:
+
 ```
 
 git add .
@@ -11,9 +13,24 @@ git push origin v1.0.0
 
 git push origin
 ```
+- 推送到公开仓库 Hyperliquid_Whale_Analytics:
 
+git remote add public git@github.com:kkter/Hyperliquid_Whale_Analytics.git # 自定义远程分支的名称为 "public"
 
+git push -u origin master
 
+```
+git add .
+
+git commit -m "init"
+
+git tag -a v1.0.0 -m "init"
+
+git push public v1.0.0
+
+git push public
+
+---
 
 1. git commit -m "init"
 
@@ -37,3 +54,8 @@ git push origin
    增加自动刷新网页功能。
    “用JavaScript定时刷新部分内容”
    git commit -m "增加网页自动刷新功能"
+   git tag -a v1.0.0 -m "初版"
+
+
+6. 2025-06-25
+   推送到不同仓库

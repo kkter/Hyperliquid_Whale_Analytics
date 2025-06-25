@@ -5,7 +5,7 @@ import math  # <-- Import the math library
 from datetime import datetime
 
 # --- Configuration ---
-DATABASE_FILE = 'whale_tracker.db'
+DATABASE_FILE = 'data/whale_tracker.db'
 HYPERLIQUID_API_URL = "https://api.hyperliquid.xyz/info"
 # The main loop will run every 5 minutes.
 POLLING_INTERVAL_SECONDS = 300 

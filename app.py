@@ -2,7 +2,7 @@ import sqlite3
 from flask import Flask, render_template, jsonify
 
 app = Flask(__name__)
-DATABASE_FILE = 'whale_tracker.db'
+DATABASE_FILE = 'data/whale_tracker.db'
 
 def get_db_connection():
     """Creates a database connection that returns rows as dictionaries."""

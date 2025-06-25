@@ -9,7 +9,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 
 # --- Configuration ---
-DATABASE_FILE = 'whale_tracker.db'
+DATABASE_FILE = 'data/whale_tracker.db'
 URL = "https://www.coinglass.com/zh/hyperliquid"
 MAX_ENTRIES_TO_SCRAPE = 20
 
