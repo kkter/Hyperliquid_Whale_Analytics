@@ -24,9 +24,9 @@ git add .
 
 git commit -m "init"
 
-git tag -a v1.0.0 -m "init"
+git tag -a v1.0.1 -m "init"
 
-git push public v1.0.0
+git push public v1.0.1
 
 git push public
 
