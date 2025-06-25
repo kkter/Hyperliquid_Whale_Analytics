@@ -3,8 +3,11 @@
 
 git add .
 
-git commit -m "前、后端完成"
+git commit -m "增加网页自动刷新功能"
 
+git tag -a v1.0.0 -m "初版"
+
+git push origin v1.0.0
 
 git push origin
 ```
@@ -29,3 +32,8 @@ git push origin
    其他小Bug;
 
    git commit -m "修复小Bug"
+
+5. 2025-06-25
+   增加自动刷新网页功能。
+   “用JavaScript定时刷新部分内容”
+   git commit -m "增加网页自动刷新功能"

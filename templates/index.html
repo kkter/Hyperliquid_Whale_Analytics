@@ -102,9 +102,7 @@ function formatLargeNumber(num) {
     return sign + absNum.toFixed(2);
 }
 
-
-document.addEventListener('DOMContentLoaded', function () {
-    // Fetch all overview data from our new API endpoint
+function loadMarketOverview() {
     fetch('/api/market_overview')
         .then(response => response.json())
         .then(data => {
@@ -166,6 +164,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 options: { responsive: true, maintainAspectRatio: true }
             });
         });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    loadMarketOverview();
+    setInterval(loadMarketOverview, 120000); // 每2分钟自动刷新
 
     // --- NEW: Format numbers in the table after page load ---
     document.querySelectorAll('td[data-value]').forEach(cell => {
