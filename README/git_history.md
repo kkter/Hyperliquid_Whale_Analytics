@@ -5,7 +5,7 @@
 
 git add --force . # 强制添加所有文件
 
-git commit -m "docker 部署"
+git commit -m "requirements.txt"
 
 git tag -a v1.0.0 -m "初版"
 
@@ -44,27 +44,40 @@ git push origin
    docker 部署
    git commit -m "docker 部署"
 
+7. 2025-06-26
+   git commit -m "requirements.txt"
+
 
 
 
 ## 推送到公开仓库 Hyperliquid_Whale_Analytics:
 
-忽略两个文件夹
+### 首次关联第二个远程仓库：
+git remote add public git@github.com:kkter/Hyperliquid_Whale_Analytics.git # 自定义远程分支的名称为 "public"
+
+git push -u origin master
+
+
+### 常规 Git 流程：
+
+
+
+git ls-files | grep -E "Assist/|README/|.gitignore"  # 检查被忽略的文件夹是否被追踪
 
 git rm -r --cached Assist/
 
 git rm -r --cached README/
 
-git remote add public git@github.com:kkter/Hyperliquid_Whale_Analytics.git # 自定义远程分支的名称为 "public"
+git rm --cached .gitignore
 
-git push -u origin master
+git rm --cached .DS_Store
 
 
 
 ```
 git add .
 
-git commit -m "docker deploy"
+git commit -m "requirements.txt"
 
 
 git tag -a v1.0.1 -m "init"
@@ -86,3 +99,6 @@ git push public
 
 4. 2025-06-26
    git commit -m "docker deploy"
+
+5. 2025-06-26
+   git commit -m "requirements.txt"
