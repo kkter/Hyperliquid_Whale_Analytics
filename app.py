@@ -133,7 +133,3 @@ def market_overview_api():
         'asset_distribution': asset_distribution,
         'market_sentiment': market_sentiment
     })
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
