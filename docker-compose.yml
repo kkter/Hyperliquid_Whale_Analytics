@@ -22,6 +22,7 @@ services:
     networks:
       - app_network
     shm_size: '2g'
+    init: true
 
   update_positions:
     build: .
