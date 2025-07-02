@@ -103,10 +103,17 @@ def scrape_whale_data():
         
         return scraped_data
 
+    except Exception as e:
+        print(f"Error during scraping: {e}")
+        return []
+
     finally:
         if driver:
-            driver.quit()
-            print("WebDriver has been closed.")
+            try:
+                driver.quit()
+                print("WebDriver has been closed.")
+            except Exception as e:
+                print(f"Error while closing WebDriver: {e}")
 
 def save_data_to_db(whale_data):
     """Saves the scraped data into the SQLite database."""
