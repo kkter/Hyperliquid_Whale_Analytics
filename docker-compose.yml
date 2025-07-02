@@ -21,6 +21,7 @@ services:
     restart: always
     networks:
       - app_network
+    shm_size: '2g'
 
   update_positions:
     build: .
