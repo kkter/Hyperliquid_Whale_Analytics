@@ -1,5 +1,5 @@
 import sqlite3
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 
 app = Flask(__name__)
 DATABASE_FILE = 'data/whale_tracker.db'
@@ -15,8 +15,6 @@ def index():
     """Main dashboard page."""
     conn = get_db_connection()
     
-    # --- 1. Fetch data for the main leaderboard table ---
-    # This query is updated to include a 'direction' field.
     positions = conn.execute('''
         SELECT
             ls.rank,
@@ -47,8 +45,6 @@ def whale_profile(address):
     
     whale = conn.execute('SELECT * FROM addresses WHERE address = ?', (address,)).fetchone()
     
-    # --- QUERY MODIFIED HERE ---
-    # Add the CASE statement to determine position direction.
     current_positions = conn.execute('''
         SELECT *,
             CASE
@@ -75,8 +71,6 @@ def whale_history_api(address):
     ''', (address,)).fetchall()
     conn.close()
     
-    # Process data for Chart.js
-    # We group data by asset to draw multiple lines on the chart
     datasets = {}
     for row in history:
         asset = row['asset']
@@ -87,20 +81,17 @@ def whale_history_api(address):
         
     return jsonify(datasets)
 
-# --- NEW API ENDPOINT FOR OVERVIEW CHARTS ---
 @app.route('/api/market_overview')
 def market_overview_api():
     """API endpoint to provide data for the overview charts and KPIs."""
     conn = get_db_connection()
 
-    # 1. Calculate KPIs
     kpi_cards = {
         'total_whales': conn.execute('SELECT COUNT(*) FROM addresses').fetchone()[0],
         'net_sentiment': conn.execute('SELECT SUM(position_size_usd) FROM position_details').fetchone()[0] or 0,
         'avg_leverage': conn.execute('SELECT AVG(leverage) FROM position_details WHERE leverage > 0').fetchone()[0] or 0
     }
 
-    # 2. Calculate Asset Distribution for Pie Chart
     asset_dist_data = conn.execute('''
         SELECT asset, SUM(ABS(position_size_usd)) as total_value
         FROM position_details
@@ -113,7 +104,6 @@ def market_overview_api():
         'data': [row['total_value'] for row in asset_dist_data]
     }
 
-    # 3. Calculate Long vs Short for Doughnut Chart
     sentiment_data = conn.execute('''
         SELECT
             SUM(CASE WHEN position_size_usd > 0 THEN position_size_usd ELSE 0 END) as long_value,
@@ -133,3 +123,48 @@ def market_overview_api():
         'asset_distribution': asset_distribution,
         'market_sentiment': market_sentiment
     })
+
+# SEO Routes
+@app.route('/robots.txt')
+def robots_txt():
+    """Robots.txt file for search engine crawlers."""
+    return '''User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: {}/sitemap.xml'''.format(request.url_root.rstrip('/')), 200, {'Content-Type': 'text/plain'}
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    """Generate sitemap for search engines."""
+    from flask import request
+    import datetime
+    
+    conn = get_db_connection()
+    whales = conn.execute('SELECT address FROM addresses ORDER BY address').fetchall()
+    conn.close()
+    
+    sitemap = '''<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>{}</loc>
+        <lastmod>{}</lastmod>
+        <changefreq>hourly</changefreq>
+        <priority>1.0</priority>
+    </url>'''.format(request.url_root.rstrip('/'), datetime.datetime.now().strftime('%Y-%m-%d'))
+    
+    for whale in whales:
+        sitemap += '''
+    <url>
+        <loc>{}/whale/{}</loc>
+        <lastmod>{}</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+    </url>'''.format(request.url_root.rstrip('/'), whale['address'], datetime.datetime.now().strftime('%Y-%m-%d'))
+    
+    sitemap += '\n</urlset>'
+    
+    return sitemap, 200, {'Content-Type': 'application/xml'}
+
+if __name__ == '__main__':
+    app.run(debug=True)

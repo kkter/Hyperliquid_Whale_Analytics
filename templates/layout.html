@@ -3,11 +3,53 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Whale Analytics{% endblock %}</title>
+    <title>{% block title %}Hyperliquid Analytics - Real-time Crypto Whale Tracking{% endblock %}</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{% block description %}Track Hyperliquid whales in real-time. Monitor large crypto positions, analyze market sentiment, and get insights into whale trading behavior.{% endblock %}">
+    <meta name="keywords" content="{% block keywords %}Hyperliquid, whale tracking, crypto whales, large positions, trading analytics, market sentiment, DeFi analytics{% endblock %}">
+    <meta name="author" content="Whale Analytics Team">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph Tags -->
+    <meta property="og:title" content="{% block og_title %}Hyperliquid Whale Analytics - Professional Crypto Whale Tracking{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Real-time monitoring of Hyperliquid whale positions with comprehensive analytics and market insights.{% endblock %}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:site_name" content="Hyperliquid Whale Analytics">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter Card Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{% block twitter_title %}Hyperliquid Whale Analytics{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}Professional crypto whale tracking and analytics platform{% endblock %}">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ request.url }}">
+    
+    <!-- Schema.org Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Hyperliquid Whale Analytics",
+        "description": "Professional Hyperliquid whale tracking and analytics platform",
+        "url": "{{ request.url_root }}",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Chart.js for charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://umami.520353.xyz/demo.js" data-website-id="66fce96a-6614-4b26-aa13-e1068625e4e3"></script>
     <style>
         /* --- CSS FOR STICKY FOOTER --- */
         body {
@@ -26,7 +68,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">🐋 Whale Analytics</a>
+            <a class="navbar-brand" href="{{ url_for('index') }}">Hyperliquid Whale Analytics</a>
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
@@ -45,7 +87,7 @@
     </main>
 
     <footer class="text-center text-muted py-4 mt-4">
-        <p>&copy; 2025 Whale Analytics Project</p>
+        <p>&copy; 2025 Hyperliquid Whale Analytics</p>
     </footer>
 
 </body>

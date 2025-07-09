@@ -1,71 +1,86 @@
 {% extends "layout.html" %}
 
-{% block title %}Profile: {{ whale.address[:10] }}...{% endblock %}
+{% block title %}Whale Profile: {{ whale.address[:10] }}... - Position Analysis{% endblock %}
+{% block description %}Detailed analysis of whale {{ whale.address[:10] }}... on Hyperliquid. View current positions, historical performance, and trading patterns.{% endblock %}
+{% block keywords %}whale profile, {{ whale.address[:10] }}, crypto whale analysis, position tracking, trading history{% endblock %}
+
+{% block og_title %}Whale {{ whale.address[:10] }}... Profile - Hyperliquid Analytics{% endblock %}
+{% block og_description %}Comprehensive profile and position analysis for whale {{ whale.address[:10] }}... including current holdings and historical rank performance.{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h2 class="mb-1">Whale Profile</h2>
-    <p class="text-muted mb-4" style="word-wrap: break-word;">{{ whale.address }}</p>
+    <header class="mb-4">
+        <h1 class="h2 mb-1">Whale Profile Analysis</h1>
+        <p class="text-muted mb-4" style="word-wrap: break-word;" title="{{ whale.address }}">
+            Address: {{ whale.address }}
+        </p>
+    </header>
 
-    <div class="card mb-4">
-        <div class="card-header">Current Positions</div>
-        <div class="table-responsive">
-            <table class="table mb-0">
-                <thead>
-                    <tr>
-                        <th>Asset</th>
-                        <th>Direction</th>
-                        <th>Position (USD)</th>
-                        <th>Unrealized PnL</th>
-                        <th>Leverage</th>
-                        <th>Entry Price</th>
-                        <th>Last Updated</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for pos in positions %}
-                    <tr>
-                        <td><strong>{{ pos.asset }}</strong></td>
-                        <td>
-                            {% if pos.direction == 'Long' %}
-                                <span class="badge bg-success">Long</span>
-                            {% elif pos.direction == 'Short' %}
-                                <span class="badge bg-danger">Short</span>
-                            {% else %}
-                                <span class="badge bg-secondary">N/A</span>
-                            {% endif %}
-                        </td>
-                        <td data-value="{{ pos.position_size_usd or 0 }}">
-                            ${{ "{:,.2f}".format((pos.position_size_usd or 0) | abs) }}
-                        </td>
-                        <td class="{% if (pos.unrealized_pnl or 0) >= 0 %}text-success{% else %}text-danger{% endif %}" data-value="{{ pos.unrealized_pnl or 0 }}">
-                            ${{ "{:,.2f}".format(pos.unrealized_pnl or 0) }}
-                        </td>
-                        <td>{{ "{:,.2f}".format(pos.leverage or 0) }}x</td>
-                        <td>${{ "{:,.2f}".format(pos.entry_price or 0) }}</td>
-                        <td>{{ pos.last_updated.split('.')[0] }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center">No current position details found.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <section aria-labelledby="current-positions-heading" class="mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h2 id="current-positions-heading" class="h5 mb-0">Current Positions</h2>
+            </div>
+            <div class="table-responsive">
+                <table class="table mb-0" role="table" aria-label="Current whale positions">
+                    <thead>
+                        <tr>
+                            <th scope="col">Asset</th>
+                            <th scope="col">Direction</th>
+                            <th scope="col">Position (USD)</th>
+                            <th scope="col">Unrealized PnL</th>
+                            <th scope="col">Leverage</th>
+                            <th scope="col">Entry Price</th>
+                            <th scope="col">Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pos in positions %}
+                        <tr>
+                            <td><strong>{{ pos.asset }}</strong></td>
+                            <td>
+                                {% if pos.direction == 'Long' %}
+                                    <span class="badge bg-success">Long</span>
+                                {% elif pos.direction == 'Short' %}
+                                    <span class="badge bg-danger">Short</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td data-value="{{ pos.position_size_usd or 0 }}">
+                                ${{ "{:,.2f}".format((pos.position_size_usd or 0) | abs) }}
+                            </td>
+                            <td class="{% if (pos.unrealized_pnl or 0) >= 0 %}text-success{% else %}text-danger{% endif %}" data-value="{{ pos.unrealized_pnl or 0 }}">
+                                ${{ "{:,.2f}".format(pos.unrealized_pnl or 0) }}
+                            </td>
+                            <td>{{ "{:,.2f}".format(pos.leverage or 0) }}x</td>
+                            <td>${{ "{:,.2f}".format(pos.entry_price or 0) }}</td>
+                            <td>{{ pos.last_updated.split('.')[0] }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center">No current position details found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
+    </section>
 
-    <div class="card">
-        <div class="card-header">Historical Rank on Leaderboard</div>
-        <div class="card-body">
-            <canvas id="rankHistoryChart"></canvas>
+    <section aria-labelledby="rank-history-heading">
+        <div class="card">
+            <div class="card-header">
+                <h2 id="rank-history-heading" class="h5 mb-0">Historical Rank on Leaderboard</h2>
+            </div>
+            <div class="card-body">
+                <canvas id="rankHistoryChart" aria-label="Historical rank performance chart"></canvas>
+            </div>
         </div>
-    </div>
+    </section>
 </div>
 
 <script>
-// This function should be moved to layout.html if not already there,
-// but including it here for completeness.
 function formatLargeNumber(num) {
     if (num === null || isNaN(num)) return 'N/A';
     if (num === 0) return '0';
@@ -78,17 +93,15 @@ function formatLargeNumber(num) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Format numbers in the table
     document.querySelectorAll('td[data-value]').forEach(cell => {
         const value = parseFloat(cell.getAttribute('data-value'));
-        if (cell.cellIndex === 2) { // Position (USD) column
+        if (cell.cellIndex === 2) {
              cell.textContent = '$' + formatLargeNumber(Math.abs(value));
-        } else { // PnL column
+        } else {
              cell.textContent = '$' + formatLargeNumber(value);
         }
     });
 
-    // Fetch data for the chart
     fetch(`/api/whale_history/{{ whale.address }}`)
         .then(response => response.json())
         .then(data => {
@@ -98,13 +111,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const colors = ['#0d6efd', '#dc3545', '#198754', '#ffc107', '#0dcaf0'];
             let colorIndex = 0;
 
-            // Create a dataset for each asset
             for (const asset in data) {
                 datasets.push({
                     label: `${asset} Rank`,
                     data: data[asset].data,
                     borderColor: colors[colorIndex % colors.length],
-                    backgroundColor: colors[colorIndex % colors.length] + '33', // semi-transparent fill
+                    backgroundColor: colors[colorIndex % colors.length] + '33',
                     tension: 0.1,
                     fill: false
                 });
@@ -114,7 +126,6 @@ document.addEventListener('DOMContentLoaded', function () {
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    // Use the labels from the first dataset (they should be consistent)
                     labels: data[Object.keys(data)[0]]?.labels || [],
                     datasets: datasets
                 },
@@ -122,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     scales: {
                         y: {
                             title: { display: true, text: 'Rank' },
-                            reverse: true, // Lower rank number is better
+                            reverse: true,
                             beginAtZero: false
                         },
                         x: {
