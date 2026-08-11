@@ -1,79 +1,90 @@
 # Hyperliquid Whale Analytics
 
-## Project Introduction
+A self-hosted pipeline and dashboard for exploring the public positions of accounts shown on a third-party Hyperliquid leaderboard.
 
-This project is an automated Hyperliquid whale position tracking and analytics platform.  
-It periodically scrapes the Coinglass Hyperliquid leaderboard, fetches real-time whale position data via the official API, and visualizes everything through a Flask web application.
+## What it does
 
-**Key features:**
+- Collects up to 20 leaderboard entries every four hours with Selenium
+- Stores address, asset, rank and observation time as historical snapshots
+- Polls Hyperliquid's public `clearinghouseState` endpoint every five minutes
+- Normalizes position value, direction, unrealized PnL, leverage and entry price in SQLite
+- Presents current positions, market-level summaries and rank history in a Flask dashboard
 
-- Real-time whale leaderboard and position details
-- Visualization of long/short sentiment and asset distribution
-- Whale historical position and behavior analysis
-- Automated data collection and position updates
-- Supports multi-process Docker Compose deployment with persistent data and logs
+The application is read-only. It does not require wallet keys and does not submit transactions.
 
----
+## Architecture
 
-## Directory Structure
-
-```
-/home/kkter/app/Hyperliquid_Whale_Analytics/
-├── app.py
-├── get_address.py
-├── update_positions.py
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-├── templates/
-├── data/         # Persistent database directory
-└── logs/         # Persistent log directory (optional)
+```text
+Third-party leaderboard
+        │ Selenium / Beautiful Soup (4-hour cycle)
+        ▼
+ leaderboard_snapshots ───────┐
+ addresses                    │
+                              ├──► SQLite ──► Flask + Chart.js
+ Hyperliquid public API       │
+        │ HTTP polling (5-minute cycle)
+        ▼                     │
+ position_details ────────────┘
 ```
 
----
+Docker Compose runs three services from the same image:
 
-## Quick Deployment
+| Service | Responsibility |
+| --- | --- |
+| `get_address` | Maintains the address registry and leaderboard snapshots |
+| `update_positions` | Refreshes open-position details through the Hyperliquid API |
+| `web` | Serves the dashboard and JSON endpoints with Gunicorn |
 
-### 1. Clone the repository
+## Quick start
+
+### Requirements
+
+- Docker with the Compose plugin
+- Internet access for the leaderboard and Hyperliquid API
+- An existing Docker network named `app_network`
 
 ```bash
-git clone https://github.com/yourusername/Hyperliquid_Whale_Analytics.git
+git clone https://github.com/kkter/Hyperliquid_Whale_Analytics.git
 cd Hyperliquid_Whale_Analytics
-```
-
-### 2. Create persistent directories
-
-```bash
+docker network create app_network
 mkdir -p data logs
+docker compose up -d --build
 ```
 
-### 3. Docker Compose network configuration
+Open `http://localhost:5000`.
 
-Make sure your `docker-compose.yml` includes:
-
-```yaml
-networks:
-  app_network:
-    external: true
-```
-and that `app_network` already exists.
-
-### 4. Build and start services
+If `app_network` already exists, skip the network-creation command. Inspect service output with:
 
 ```bash
-docker-compose up -d
+docker compose logs -f
 ```
 
-### 5. Access the service
+The repository contains a sample SQLite snapshot for immediate exploration. The running services persist subsequent data in `data/`.
 
-Visit in your browser: http://<server-ip>:5000
+## Local development
 
----
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+mkdir -p data logs
+python get_address.py
+```
 
-## Notes
+Run `update_positions.py` and `app.py` in separate terminals after the address collector has initialized the database. The Flask development server uses port `5000`.
 
-- Database and log files are persisted in `data/` and `logs/` directories for easy backup and migration.
-- The three services (web, leaderboard crawler, position updater) run as independent processes.
-- All services are connected via the `app_network` Docker network.
+## Web routes
 
----
+| Route | Purpose |
+| --- | --- |
+| `GET /` | Current leaderboard and position dashboard |
+| `GET /whale/<address>` | Current positions for one tracked address |
+| `GET /api/market_overview` | Aggregate position and sentiment data |
+| `GET /api/whale_history/<address>` | Historical rank series for one address |
+
+## Operational notes
+
+- The leaderboard collector depends on the current third-party page structure and may require selector updates when that site changes.
+- `webdriver-manager` downloads a compatible browser driver at runtime; production deployments should pin or preinstall the browser and driver for more predictable builds.
+- Hyperliquid position data is public and changes continuously. The dashboard reflects the most recent successful polling cycle, not an execution-grade market feed.
+- This project does not provide trading signals or financial advice.
