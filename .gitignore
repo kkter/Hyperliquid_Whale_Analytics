@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+logs/
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
