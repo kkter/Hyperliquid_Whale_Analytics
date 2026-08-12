@@ -2,6 +2,8 @@
 
 A self-hosted pipeline and dashboard for exploring the public positions of tracked Hyperliquid accounts.
 
+[Live demo](https://whales.520353.xyz)
+
 ## What it does
 
 - Uses the bundled address registry even when third-party leaderboard collection is unavailable
