@@ -1,8 +1,8 @@
 # Hyperliquid Whale Analytics
 
-A self-hosted data pipeline and Flask dashboard for studying the public positions of accounts listed on a third-party Hyperliquid leaderboard.
+A self-hosted data pipeline and Flask dashboard for studying public Hyperliquid positions from a durable tracked-address registry.
 
-The project combines scheduled browser-based collection, Hyperliquid's public information API, SQLite persistence and server-rendered visualizations. It is a read-only analytics project: it does not connect a wallet or place trades.
+The official Hyperliquid information API is the primary source. An optional browser collector can enrich the bundled address registry with third-party leaderboard ranks, but the site remains available when that collector fails. It is a read-only analytics project: it does not connect a wallet or place trades.
 
 ## Documentation
 
@@ -12,9 +12,9 @@ The project combines scheduled browser-based collection, Hyperliquid's public in
 ## Data flow
 
 ```text
-Leaderboard page ──► address snapshots ─┐
-                                        ├──► SQLite ──► Flask dashboard
-Hyperliquid API ──► current positions ──┘
+Tracked addresses ──► Hyperliquid API ──► last-known-good positions ──► SQLite ──► Flask
+      ▲
+      └──── optional Coinglass rank enrichment (failure-tolerant)
 ```
 
 ## Stack

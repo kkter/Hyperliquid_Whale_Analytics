@@ -1,158 +1,166 @@
-import sqlite3
+"""Refresh tracked-wallet positions from Hyperliquid's official info API."""
+
+from __future__ import annotations
+
+import math
+import os
 import time
+from typing import Any
+
 import requests
-import math  # <-- Import the math library
-from datetime import datetime
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-# --- Configuration ---
-DATABASE_FILE = 'data/whale_tracker.db'
-HYPERLIQUID_API_URL = "https://api.hyperliquid.xyz/info"
-# The main loop will run every 5 minutes.
-POLLING_INTERVAL_SECONDS = 300 
+from database import db_session, initialize_database, record_sync_status, utc_now
 
-def setup_database():
-    """Ensures the database and the 'position_details' table exist."""
-    conn = None
+
+HYPERLIQUID_API_URL = os.getenv("HYPERLIQUID_API_URL", "https://api.hyperliquid.xyz/info")
+POLLING_INTERVAL_SECONDS = int(os.getenv("POSITION_POLL_SECONDS", "300"))
+REQUEST_TIMEOUT = (5, 20)
+
+
+def build_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=0.75,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"POST"}),
+    )
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    session.headers.update({"Content-Type": "application/json", "User-Agent": "whale-analytics/2.0"})
+    return session
+
+
+def get_addresses_to_track() -> list[str]:
+    with db_session() as connection:
+        rows = connection.execute("SELECT address FROM addresses ORDER BY first_seen").fetchall()
+    return [row["address"] for row in rows]
+
+
+def _parse_position(raw: dict[str, Any]) -> dict[str, float | str] | None:
+    position = raw.get("position")
+    if not isinstance(position, dict):
+        return None
     try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS position_details (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                whale_address TEXT NOT NULL,
-                asset TEXT NOT NULL,
-                position_size_usd REAL,
-                unrealized_pnl REAL,
-                leverage REAL,
-                entry_price REAL,
-                last_updated TIMESTAMP,
-                FOREIGN KEY (whale_address) REFERENCES addresses (address),
-                UNIQUE(whale_address, asset)
-            )
-        ''')
-        conn.commit()
-        print("Database table 'position_details' is ready.")
-    finally:
-        if conn:
-            conn.close()
+        size_in_asset = float(position.get("szi", 0))
+        if size_in_asset == 0:
+            return None
+        leverage_data = position.get("leverage") or {}
+        return {
+            "asset": str(position["coin"]),
+            "position_size_usd": math.copysign(float(position["positionValue"]), size_in_asset),
+            "unrealized_pnl": float(position["unrealizedPnl"]),
+            "leverage": float(leverage_data["value"]),
+            "entry_price": float(position["entryPx"]),
+        }
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
 
-def get_addresses_to_track():
-    """Fetches the list of unique whale addresses from the database."""
-    conn = None
-    try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT address FROM addresses")
-        addresses = [row[0] for row in cursor.fetchall()]
-        print(f"Found {len(addresses)} unique addresses to track.")
-        return addresses
-    except Exception as e:
-        print(f"Error fetching addresses from DB: {e}")
-        return []
-    finally:
-        if conn:
-            conn.close()
 
-def fetch_position_details_from_api(address):
-    """
-    Fetches all open positions for a single address from the Hyperliquid API.
-    """
-    print(f"Fetching details for {address[:10]}...")
-    payload = {"type": "clearinghouseState", "user": address}
-    headers = {"Content-Type": "application/json"}
-    
+def fetch_position_details_from_api(
+    address: str, session: requests.Session | None = None
+) -> list[dict[str, float | str]] | None:
+    """Return positions, or None when the request/response is not trustworthy."""
+    client = session or build_session()
     try:
-        response = requests.post(HYPERLIQUID_API_URL, json=payload, headers=headers)
+        response = client.post(
+            HYPERLIQUID_API_URL,
+            json={"type": "clearinghouseState", "user": address},
+            timeout=REQUEST_TIMEOUT,
+        )
         response.raise_for_status()
-        
-        data = response.json()
-        positions = []
-        
-        for item in data.get('assetPositions', []):
-            pos_data = item.get('position')
-            if pos_data and float(pos_data.get('szi', 0)) != 0:
-                try:
-                    # --- BUG FIX IS HERE ---
-                    # 1. Get the size in asset to determine the direction (long/short)
-                    size_in_asset = float(pos_data.get('szi', 0))
-                    # 2. Get the absolute value of the position in USD
-                    value_in_usd = float(pos_data['positionValue'])
-                    # 3. Apply the sign from 'szi' to the 'positionValue'
-                    signed_position_value = math.copysign(value_in_usd, size_in_asset)
+        payload = response.json()
+        raw_positions = payload.get("assetPositions") if isinstance(payload, dict) else None
+        if not isinstance(raw_positions, list):
+            raise ValueError("response has no assetPositions list")
+        return [position for raw in raw_positions if (position := _parse_position(raw)) is not None]
+    except (requests.RequestException, ValueError) as exc:
+        print(f"Official API refresh failed for {address[:10]}…: {exc}")
+        return None
 
-                    position_details = {
-                        'asset': pos_data['coin'],
-                        'position_size_usd': signed_position_value, # Use the corrected signed value
-                        'unrealized_pnl': float(pos_data['unrealizedPnl']),
-                        'leverage': float(pos_data['leverage']['value']),
-                        'entry_price': float(pos_data['entryPx']),
-                    }
-                    positions.append(position_details)
-                except (KeyError, TypeError, ValueError) as e:
-                    print(f"  - Could not parse a position for {address[:10]} asset {pos_data.get('coin', 'N/A')}. Error: {e}")
-        
-        return positions
 
-    except requests.exceptions.RequestException as e:
-        print(f"  - API request failed for {address[:10]}: {e}")
-        return []
-
-def update_position_details_in_db(address, position_data):
-    """Saves or updates the detailed position data for a given address in the database."""
-    if not position_data:
-        # This is new: explicitly handle closing of positions
-        # print(f"  - No open positions found for {address[:10]}. Checking for positions to clear.")
-        return
-
-    conn = None
-    try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-
-        for position in position_data:
-            sql = '''
-                INSERT INTO position_details (whale_address, asset, position_size_usd, unrealized_pnl, leverage, entry_price, last_updated)
+def replace_address_positions(address: str, positions: list[dict[str, float | str]]) -> None:
+    """Publish one successful address response in a short atomic transaction."""
+    refreshed_at = utc_now()
+    assets = [str(position["asset"]) for position in positions]
+    with db_session() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        for position in positions:
+            connection.execute(
+                """
+                INSERT INTO position_details
+                    (whale_address, asset, position_size_usd, unrealized_pnl,
+                     leverage, entry_price, last_updated)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(whale_address, asset) DO UPDATE SET
                     position_size_usd = excluded.position_size_usd,
                     unrealized_pnl = excluded.unrealized_pnl,
                     leverage = excluded.leverage,
                     entry_price = excluded.entry_price,
-                    last_updated = excluded.last_updated;
-            '''
-            cursor.execute(sql, (
-                address,
-                position['asset'],
-                position['position_size_usd'],
-                position['unrealized_pnl'],
-                position['leverage'],
-                position['entry_price'],
-                datetime.now()
-            ))
-        
-        conn.commit()
-        print(f"  - Successfully updated {len(position_data)} positions for address {address[:10]}...")
-    except Exception as e:
-        print(f"  - Database error for address {address}: {e}")
-    finally:
-        if conn:
-            conn.close()
+                    last_updated = excluded.last_updated
+                """,
+                (
+                    address,
+                    position["asset"],
+                    position["position_size_usd"],
+                    position["unrealized_pnl"],
+                    position["leverage"],
+                    position["entry_price"],
+                    refreshed_at,
+                ),
+            )
+        if assets:
+            placeholders = ",".join("?" for _ in assets)
+            connection.execute(
+                f"DELETE FROM position_details WHERE whale_address = ? AND asset NOT IN ({placeholders})",
+                (address, *assets),
+            )
+        else:
+            connection.execute("DELETE FROM position_details WHERE whale_address = ?", (address,))
+        connection.commit()
+
+
+def run_update_cycle(session: requests.Session | None = None) -> tuple[int, int]:
+    addresses = get_addresses_to_track()
+    if not addresses:
+        record_sync_status("hyperliquid", False, "no tracked addresses")
+        print("No tracked addresses are available; the existing database is unchanged.")
+        return 0, 0
+
+    client = session or build_session()
+    succeeded = 0
+    failed = 0
+    for address in addresses:
+        positions = fetch_position_details_from_api(address, client)
+        if positions is None:
+            failed += 1
+        else:
+            replace_address_positions(address, positions)
+            succeeded += 1
+            print(f"Updated {len(positions)} position(s) for {address[:10]}…")
+        time.sleep(0.2)
+
+    if failed:
+        record_sync_status("hyperliquid", False, f"{failed} of {len(addresses)} address requests failed")
+    else:
+        record_sync_status("hyperliquid", True)
+    return succeeded, failed
+
+
+def main() -> None:
+    initialize_database()
+    run_once = os.getenv("RUN_ONCE", "0").lower() in {"1", "true", "yes"}
+    while True:
+        print("Starting Hyperliquid position refresh cycle…")
+        succeeded, failed = run_update_cycle()
+        print(f"Refresh complete: {succeeded} succeeded, {failed} failed.")
+        if run_once:
+            raise SystemExit(1 if failed and not succeeded else 0)
+        time.sleep(POLLING_INTERVAL_SECONDS)
+
 
 if __name__ == "__main__":
-    setup_database()
-
-    while True:
-        print(f"\n--- Starting new update cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
-        
-        addresses = get_addresses_to_track()
-
-        if not addresses:
-            print("No addresses found in the database. Run get_address.py first.")
-        else:
-            for addr in addresses:
-                details = fetch_position_details_from_api(addr)
-                update_position_details_in_db(addr, details)
-                time.sleep(1)
-
-        print(f"--- Cycle finished. Waiting for {POLLING_INTERVAL_SECONDS} seconds... ---")
-        time.sleep(POLLING_INTERVAL_SECONDS)
+    main()

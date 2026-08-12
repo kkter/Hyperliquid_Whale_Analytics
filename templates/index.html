@@ -11,7 +11,13 @@
 <!-- SEO-friendly heading structure -->
 <header class="mb-4">
     <h1 class="h2 mb-3">🐳 Whale Analytics Dashboard</h1>
-    <p class="lead text-muted">Real-time monitoring of large positions and market sentiment on Hyperliquid</p>
+    <p class="lead text-muted">Near-real-time monitoring of tracked positions using Hyperliquid's official API</p>
+    <p class="small text-muted mb-1">Last successful official refresh: {{ last_success or 'using bundled last-known-good data' }}</p>
+    {% if sync_warning %}
+    <div class="alert alert-warning py-2" role="status">
+        The latest refresh was incomplete. Displaying the most recent successful data.
+    </div>
+    {% endif %}
 </header>
 
 <div class="container">
@@ -51,7 +57,7 @@
                 <table class="table table-hover table-striped mb-0" role="table" aria-label="Whale positions leaderboard">
                     <thead class="table-light">
                         <tr>
-                            <th scope="col">Rank</th>
+                            <th scope="col">Optional Rank</th>
                             <th scope="col">Asset</th>
                             <th scope="col">Whale Address</th>
                             <th scope="col">Direction</th>
@@ -64,7 +70,13 @@
                     <tbody>
                         {% for pos in positions %}
                         <tr>
-                            <td><span class="badge bg-secondary">{{ pos.rank }}</span></td>
+                            <td>
+                                {% if pos.rank is not none %}
+                                    <span class="badge bg-secondary">{{ pos.rank }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
                             <td><strong>{{ pos.asset }}</strong></td>
                             <td>
                                 <a href="{{ url_for('whale_profile', address=pos.whale_address) }}" 
@@ -89,6 +101,10 @@
                             </td>
                             <td>{{ "{:,.2f}".format(pos.leverage or 0) }}x</td>
                             <td>${{ "{:,.2f}".format(pos.entry_price or 0) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">No open tracked positions are currently available.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

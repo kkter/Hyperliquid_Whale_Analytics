@@ -1,39 +1,56 @@
-
 services:
   web:
     build: .
-    command: gunicorn -w 4 -b 0.0.0.0:5000 app:app
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    restart: always
-    networks:
-      - app_network
-
-  get_address:
-    build: .
-    command: python get_address.py
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    restart: always
-    networks:
-      - app_network
-    shm_size: '2g'
+    image: whale-analytics:local
+    container_name: whale_analytics_web
+    restart: unless-stopped
     init: true
+    ports:
+      - "${WHALES_BIND_ADDRESS:-127.0.0.1}:${WHALES_PORT:-5103}:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      DATABASE_FILE: /app/data/whale_tracker.db
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   update_positions:
-    build: .
-    command: python update_positions.py
+    image: whale-analytics:local
+    container_name: whale_analytics_updater
+    restart: unless-stopped
+    init: true
+    depends_on:
+      web:
+        condition: service_started
+    command: ["python", "update_positions.py"]
     volumes:
       - ./data:/app/data
-      - ./logs:/app/logs
-    restart: always
-    networks:
-      - app_network
+    environment:
+      DATABASE_FILE: /app/data/whale_tracker.db
+      POSITION_POLL_SECONDS: "300"
 
-networks:
-  app_network:
-    external: true
+  coinglass_collector:
+    image: whale-analytics:local
+    container_name: whale_analytics_coinglass
+    profiles: ["coinglass"]
+    restart: unless-stopped
+    init: true
+    depends_on:
+      web:
+        condition: service_started
+    command: ["python", "get_address.py"]
+    volumes:
+      - ./data:/app/data
+    environment:
+      DATABASE_FILE: /app/data/whale_tracker.db
+      COINGLASS_LOOP: "1"
+      COINGLASS_POLL_SECONDS: "14400"
+    shm_size: "1gb"

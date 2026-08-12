@@ -1,37 +1,33 @@
 # Hyperliquid 大户持仓分析
 
-一个自托管的数据管道与仪表盘，用于研究第三方 Hyperliquid 排行榜中账户的公开持仓。
+一个自托管的数据管道与仪表盘，用于研究已跟踪 Hyperliquid 地址的公开持仓。
 
 ## 主要功能
 
-- 每四小时使用 Selenium 采集最多 20 条排行榜记录
-- 将地址、资产、排名和采集时间保存为历史快照
-- 每五分钟轮询 Hyperliquid 公共 `clearinghouseState` 接口
+- 第三方排行榜不可用时仍使用仓库内已有地址持续工作
+- 每五分钟通过超时与重试机制轮询 Hyperliquid 官方 `clearinghouseState` 接口
 - 在 SQLite 中规范化保存仓位价值、方向、未实现盈亏、杠杆和入场价格
-- 通过 Flask 仪表盘展示当前仓位、市场汇总与排名历史
+- API 请求失败时保留该地址最近一次成功仓位
+- 仅在官方响应有效时清理已平仓仓位，并原子发布单地址更新
+- 可选使用 Selenium 采集第三方排名，作为历史补充信息
+- 使用 SQLite WAL、忙等待、同步状态和生产健康检查
 
 本应用仅进行只读分析，不需要钱包私钥，也不会提交交易。
 
 ## 架构
 
 ```text
-第三方排行榜
-      │ Selenium / Beautiful Soup（每 4 小时）
-      ▼
- leaderboard_snapshots ───────┐
- addresses                    │
-                              ├──► SQLite ──► Flask + Chart.js
- Hyperliquid 公共 API         │
-      │ HTTP 轮询（每 5 分钟）
-      ▼                       │
- position_details ────────────┘
+地址列表 ──► Hyperliquid 官方 API ──► 最近成功仓位
+   ▲                                  │
+   │                                  ▼
+可选 Coinglass 采集器 ──► 排名历史   SQLite ──► Flask
 ```
 
-Docker Compose 从同一镜像运行三个服务：
+Docker Compose 默认运行两个服务，并提供一个可选 profile：
 
 | 服务 | 职责 |
 | --- | --- |
-| `get_address` | 维护地址列表与排行榜历史快照 |
+| `coinglass_collector` | 可选 `coinglass` profile，用于补充排名与地址 |
 | `update_positions` | 通过 Hyperliquid API 刷新未平仓仓位 |
 | `web` | 使用 Gunicorn 提供仪表盘和 JSON API |
 
@@ -40,20 +36,23 @@ Docker Compose 从同一镜像运行三个服务：
 ### 要求
 
 - Docker 与 Compose 插件
-- 能访问排行榜和 Hyperliquid API 的网络
-- 名为 `app_network` 的 Docker 网络
+- 能访问 Hyperliquid API 的网络
 
 ```bash
 git clone https://github.com/kkter/Hyperliquid_Whale_Analytics.git
 cd Hyperliquid_Whale_Analytics
-docker network create app_network
-mkdir -p data logs
 docker compose up -d --build
 ```
 
-访问 `http://localhost:5000`。如果 `app_network` 已存在，可跳过创建网络的命令。
+访问 `http://localhost:5103`。
 
-仓库包含一份示例 SQLite 快照，便于立即查看界面；后续数据会持久化到 `data/`。
+仓库包含已刷新的 SQLite 快照与已跟踪地址，便于立即查看界面；后续数据会持久化到 `data/`。
+
+默认部署不依赖 Coinglass。如需启用可失败降级的浏览器采集器：
+
+```bash
+docker compose --profile coinglass up -d
+```
 
 ## 本地开发
 
@@ -61,11 +60,21 @@ docker compose up -d --build
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-mkdir -p data logs
-python get_address.py
+RUN_ONCE=1 python update_positions.py
+python app.py
 ```
 
-地址采集器初始化数据库后，在另外两个终端分别运行 `update_positions.py` 与 `app.py`。Flask 开发服务器使用 `5000` 端口。
+若需持续刷新，可在另一终端直接运行 `update_positions.py`（不设置 `RUN_ONCE`）。`get_address.py` 是可选补充源。
+
+## 配置
+
+| 环境变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `DATABASE_FILE` | `data/whale_tracker.db` | 持久化 SQLite 数据库 |
+| `POSITION_POLL_SECONDS` | `300` | 官方 API 刷新间隔 |
+| `WHALES_BIND_ADDRESS` | `127.0.0.1` | Docker 宿主机绑定地址 |
+| `WHALES_PORT` | `5103` | Docker 宿主机端口 |
+| `COINGLASS_LOOP` | `0` | 是否重复运行可选采集器 |
 
 ## Web 路由
 
@@ -75,10 +84,11 @@ python get_address.py
 | `GET /whale/<address>` | 单个地址的当前仓位 |
 | `GET /api/market_overview` | 聚合仓位与多空数据 |
 | `GET /api/whale_history/<address>` | 单个地址的历史排名序列 |
+| `GET /healthz` | 数据库就绪状态与完整性检查 |
 
 ## 运行说明
 
-- 排行榜采集依赖第三方页面结构；上游改版后可能需要更新选择器。
-- `webdriver-manager` 会在运行时下载浏览器驱动；生产环境建议固定或预装浏览器与驱动版本。
+- 可选排行榜采集依赖第三方页面结构，可能需要更新选择器；失败不会影响仪表盘或官方 API 更新器。
+- Chromium 与 ChromeDriver 一起从 Debian 镜像仓库安装，运行时不再下载驱动。
 - 仪表盘显示最近一次成功轮询的公共数据，不是面向交易执行的实时行情源。
 - 本项目不提供交易信号或投资建议。

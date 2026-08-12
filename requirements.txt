@@ -1,6 +1,5 @@
-Flask
-selenium==4.34.0
-webdriver-manager==4.0.2
-beautifulsoup4==4.13.4
-requests
-gunicorn
+Flask>=3.1,<4
+gunicorn>=23,<24
+requests>=2.32,<3
+selenium>=4.34,<5
+beautifulsoup4>=4.13,<5
